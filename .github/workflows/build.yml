@@ -1,0 +1,94 @@
+name: Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Package release name (for example 0.71)"
+        required: true
+        type: string
+      ref:
+        description: "Upstream Yosys git ref (tag, branch, SHA). Defaults to v<tag>."
+        required: false
+        type: string
+        default: ""
+      latest:
+        description: "Mark this release as the repository latest"
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    steps:
+      - name: Resolve upstream ref
+        id: meta
+        run: |
+          set -euo pipefail
+          ref="${{ inputs.ref }}"
+          if [ -z "$ref" ]; then
+            ref="v${{ inputs.tag }}"
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout upstream Yosys
+        uses: actions/checkout@v4
+        with:
+          repository: YosysHQ/yosys
+          ref: ${{ steps.meta.outputs.ref }}
+          submodules: true
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bison clang cmake flex gawk git lld make pkg-config python3 \
+            libffi-dev libfl-dev libreadline-dev tcl-dev zlib1g-dev
+
+      - name: Configure and build
+        run: |
+          set -euo pipefail
+          cmake -B build . \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DYOSYS_USE_BUNDLED_LIBS=ON \
+            -DYOSYS_ENABLE_HOMEBREW=OFF
+          cmake --build build -j"$(nproc)"
+
+      - name: Install prefix
+        run: cmake --install build --prefix dist
+
+      - name: Check version
+        env:
+          YOSYS_DATDIR: ${{ github.workspace }}/dist/share/yosys
+        run: |
+          set -euo pipefail
+          dist/bin/yosys -V
+          dist/bin/yosys -V | tee version.txt
+          dist/bin/yosys-config --datdir
+
+      - name: Package
+        run: |
+          tar -C dist -czf yosys-ubuntu-24.04.tar.gz .
+          tar -tzf yosys-ubuntu-24.04.tar.gz | head -20
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: ${{ inputs.tag }}
+          make_latest: ${{ inputs.latest }}
+          files: yosys-ubuntu-24.04.tar.gz
+          fail_on_unmatched_files: true
+          body: |
+            Prebuilt Yosys ${{ inputs.tag }} for ubuntu-24.04.
+            Source: https://github.com/YosysHQ/yosys/tree/${{ steps.meta.outputs.ref }}
+            Archive layout: CMake prefix install (`bin/yosys`, `share/yosys`, …).
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
