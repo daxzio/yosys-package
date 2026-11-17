@@ -28,18 +28,37 @@ on:
           - 26.04
 
 jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - id: plan
+        run: |
+          case "${{ inputs.targets }}" in
+            all)
+              matrix='{"include":[{"runs-on":"ubuntu-24.04","ubuntu":"24.04"},{"runs-on":"ubuntu-26.04","ubuntu":"26.04"}]}'
+              ;;
+            24.04)
+              matrix='{"include":[{"runs-on":"ubuntu-24.04","ubuntu":"24.04"}]}'
+              ;;
+            26.04)
+              matrix='{"include":[{"runs-on":"ubuntu-26.04","ubuntu":"26.04"}]}'
+              ;;
+            *)
+              echo "unknown targets=${{ inputs.targets }}" >&2
+              exit 1
+              ;;
+          esac
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: plan
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - runs-on: ubuntu-24.04
-            ubuntu: "24.04"
-          - runs-on: ubuntu-26.04
-            ubuntu: "26.04"
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: 120
-    if: inputs.targets == 'all' || inputs.targets == matrix.ubuntu
     steps:
       - name: Resolve upstream ref
         id: meta
