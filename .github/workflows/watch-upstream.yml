@@ -1,0 +1,53 @@
+name: Watch upstream Yosys releases
+
+# Poll YosysHQ/yosys once a week. When the newest stable GitHub release is not
+# yet a package release here, dispatch the Build workflow for both Ubuntu images.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Compare upstream with package releases
+        id: cmp
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          upstream="$(gh release list -R YosysHQ/yosys --limit 20 --json tagName,isPrerelease,isDraft \
+            --jq '[.[] | select(.isDraft == false and .isPrerelease == false)][0].tagName')"
+          if [ -z "$upstream" ]; then
+            echo "No stable upstream release found" >&2
+            exit 1
+          fi
+          pkg_tag="${upstream#v}"
+          echo "upstream=$upstream" >> "$GITHUB_OUTPUT"
+          echo "package_tag=$pkg_tag" >> "$GITHUB_OUTPUT"
+          if gh release view "$pkg_tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "build_needed=false" >> "$GITHUB_OUTPUT"
+            echo "Package release $pkg_tag already exists (upstream $upstream)."
+          else
+            echo "build_needed=true" >> "$GITHUB_OUTPUT"
+            echo "Will build $pkg_tag from upstream $upstream."
+          fi
+
+      - name: Dispatch package build
+        if: steps.cmp.outputs.build_needed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run build.yml \
+            -R "$GITHUB_REPOSITORY" \
+            -f tag="${{ steps.cmp.outputs.package_tag }}" \
+            -f ref="${{ steps.cmp.outputs.upstream }}" \
+            -f latest=true \
+            -f targets=all
+          echo "Triggered build for ${{ steps.cmp.outputs.package_tag }} (${{ steps.cmp.outputs.upstream }})."

@@ -13,6 +13,12 @@ The binary is licensed the same way as [YosysHQ/yosys](https://github.com/YosysH
 
 Yosys **0.67 and later** include [sv-elab](https://github.com/povik/sv-elab) as the built-in `read_slang` command. Use that for SystemVerilog with unpacked array ports and other constructs that `read_verilog -sv` rejects. The build workflow checks that `read_slang` is present before packaging.
 
+## Automatic weekly check
+
+Workflow **Watch upstream Yosys releases** runs Mondays 06:00 UTC. If [YosysHQ/yosys](https://github.com/YosysHQ/yosys) has a new stable GitHub release that is not yet a tag here (for example upstream `v0.72` → package `0.72`), it dispatches **Build** for both Ubuntu images. Prereleases and drafts are ignored.
+
+Manual check: Actions → Watch upstream Yosys releases → Run workflow.
+
 ## Publish a version
 
 Actions → Build → Run workflow.
