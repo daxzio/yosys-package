@@ -11,6 +11,8 @@ The build workflow checks out an upstream tag, compiles Yosys on **ubuntu-24.04*
 
 The binary is licensed the same way as [YosysHQ/yosys](https://github.com/YosysHQ/yosys) (ISC-style / see upstream).
 
+Yosys **0.67 and later** include [sv-elab](https://github.com/povik/sv-elab) as the built-in `read_slang` command. Use that for SystemVerilog with unpacked array ports and other constructs that `read_verilog -sv` rejects. The build workflow checks that `read_slang` is present before packaging.
+
 ## Publish a version
 
 Actions → Build → Run workflow.
